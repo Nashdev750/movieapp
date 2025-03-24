@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { ImageFile } from '../types/image';
+import { API_URL } from './config';
 
-const API_URL = 'http://localhost:5000/api';
+
 
 const imageApi = axios.create({
   baseURL: API_URL,
