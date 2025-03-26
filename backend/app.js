@@ -153,12 +153,24 @@ router.post('/upload', upload.array('images', 10), (req, res) => {
 
 // Get all image URLs
 router.get('/images', (req, res) => {
-    fs.readdir('uploads/', (err, files) => {
-      if (err) {
-        return res.status(500).json({ error: 'Failed to read images directory' });
-      }
-      res.json([ ...files.map(file => ({url:`https://genz-panel.space/api/images/${file}`,name:file})) ]);
+  fs.readdir('uploads/', (err, files) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to read images directory' });
+    }
+  
+    // Sort files based on the numeric timestamp at the start of the filename
+    files.sort((a, b) => {
+      const timestampA = parseInt(a.split('-')[0]); // Extract timestamp from filename
+      const timestampB = parseInt(b.split('-')[0]);
+      return timestampB - timestampA; // Sort in descending order (latest first)
     });
+  
+    // Format response
+    res.json(files.map(file => ({
+      url: `https://genz-panel.space/api/images/${file}`,
+      name: file
+    })));
+  });
   });
 
 // Get a single image URL
