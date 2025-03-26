@@ -9,6 +9,10 @@ const BookingStatus = {
 
 // Define the Booking schema
 const bookingSchema = new mongoose.Schema({
+  userid: {
+    type: String,
+    required: true
+  },
   branchName: {
     type: String,
     required: true
@@ -40,7 +44,7 @@ const bookingSchema = new mongoose.Schema({
   discountPercentage: {
     type: Number
   }
-});
+}, { timestamps: true });
 
 // Create the model
 const Booking = mongoose.model('Booking', bookingSchema);

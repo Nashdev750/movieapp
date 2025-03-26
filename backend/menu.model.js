@@ -14,7 +14,7 @@ const menuSchema = new mongoose.Schema({
     type: String,
     required: true
   }
-});
+}, { timestamps: true });
 
 // Create the model
 const Menu = mongoose.model('Menu', menuSchema);

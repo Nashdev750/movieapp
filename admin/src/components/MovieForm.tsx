@@ -14,6 +14,7 @@ interface MovieFormProps {
 export const MovieForm: React.FC<MovieFormProps> = ({ initialData, onSubmit, isLoading }) => {
   const [formData, setFormData] = useState({
     title: initialData?.title || '',
+    genre: initialData?.genre || '',
     image: initialData?.image || '',
     description: initialData?.description || '',
     trailerUrl: initialData?.trailerUrl || '',
@@ -59,6 +60,17 @@ export const MovieForm: React.FC<MovieFormProps> = ({ initialData, onSubmit, isL
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors duration-200"
             placeholder="Enter movie title"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Movie Genre</label>
+          <input
+            type="text"
+            value={formData.genre}
+            onChange={(e) => setFormData({ ...formData, genre: e.target.value })}
+            className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors duration-200"
+            placeholder="Enter movie genre"
             required
           />
         </div>

@@ -15,10 +15,11 @@ mongoose.connect('mongodb://127.0.0.1:27017/moviesDB');
 
 const movieSchema = new mongoose.Schema({
   title: String,
+  genre: String,
   image: String,
   description: String,
   trailerUrl: String,
-});
+}, { timestamps: true });
 
 const newsSchema = new mongoose.Schema({
   title: String,
@@ -26,14 +27,14 @@ const newsSchema = new mongoose.Schema({
   date: String,
   description: String,
   gallery: [String],
-});
+}, { timestamps: true });
 
 const branchSchema = new mongoose.Schema({
   name: String,
   address: String,
   googleMapsUrl: String,
   images: [String],
-});
+}, { timestamps: true });
 
 const Movie = mongoose.model('Movie', movieSchema);
 const News = mongoose.model('News', newsSchema);
@@ -63,7 +64,7 @@ router.post('/movies', async (req, res) => {
 });
 
 router.get('/movies', async (req, res) => {
-  const movies = await Movie.find();
+  const movies = await Movie.find().sort({ createdAt: 1 });
   res.json(movies);
 });
 
@@ -94,7 +95,7 @@ router.post('/news', async (req, res) => {
 });
 
 router.get('/news', async (req, res) => {
-  const news = await News.find();
+  const news = await News.find().sort({ createdAt: 1 });
   res.json(news);
 });
 
@@ -125,7 +126,7 @@ router.post('/branches', async (req, res) => {
 });
 
 router.get('/branches', async (req, res) => {
-  const branches = await Branch.find();
+  const branches = await Branch.find().sort({ createdAt: 1 });
   res.json(branches);
 });
 
@@ -185,6 +186,7 @@ router.post('/bookings', async (req, res) => {
     const { branchName, date, time, fullName, phoneNumber, status, promoCode, discountPercentage } = req.body;
     
     const booking = new Booking({
+      userid,
       branchName,
       date,
       time,
@@ -205,11 +207,15 @@ router.post('/bookings', async (req, res) => {
 // Get all bookings
 router.get('/bookings', async (req, res) => {
   try {
-    const bookings = await Booking.find();
+    const bookings = await Booking.find().sort({ createdAt: 1 });
     res.status(200).json(bookings);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+router.get('/bookings/user/:userid', async (req, res) => {
+  const bookings = await Booking.find({userid: req.params.userid}).sort({ createdAt: 1 });
+  res.json(bookings);
 });
 
 // Get a specific booking by ID
@@ -284,7 +290,7 @@ router.post('/menus', async (req, res) => {
 // Get all menu items
 router.get('/menus', async (req, res) => {
   try {
-    const menus = await Menu.find();
+    const menus = await Menu.find().sort({ createdAt: 1 });
     res.status(200).json(menus);
   } catch (error) {
     res.status(500).json({ error: error.message });
