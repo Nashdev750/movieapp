@@ -1,1 +1,1 @@
-export const API_URL = 'http://62.171.174.199/api'
+export const API_URL = 'https://genz-panel.space/api'

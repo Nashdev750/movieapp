@@ -156,7 +156,7 @@ router.get('/images', (req, res) => {
       if (err) {
         return res.status(500).json({ error: 'Failed to read images directory' });
       }
-      res.json([ ...files.map(file => ({url:`http://62.171.174.199/api/images/${file}`,name:file})) ]);
+      res.json([ ...files.map(file => ({url:`https://genz-panel.space/api/images/${file}`,name:file})) ]);
     });
   });
 
