@@ -225,6 +225,16 @@ router.get('/bookings', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+router.get('/bookings/user/userid:', async (req, res) => {
+  try {
+    const bookings = await Booking.find({userid:req.params.userid}).sort({ createdAt: 1 });
+    res.status(200).json(bookings);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/bookings/user/:userid', async (req, res) => {
   const bookings = await Booking.find({userid: req.params.userid}).sort({ createdAt: 1 });
   res.json(bookings);

@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { PromoCode } from '../types/promo';
+import { API_URL } from './config';
 
-const API_URL = 'http://localhost:5000/promos';
+
 
 const promoApi = axios.create({
   baseURL: API_URL,
