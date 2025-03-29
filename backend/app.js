@@ -195,8 +195,7 @@ router.delete('/images/:imageName', (req, res) => {
 // Create a new booking
 router.post('/bookings', async (req, res) => {
   try {
-    const { branchName, date, time, fullName, phoneNumber, status, promoCode, discountPercentage } = req.body;
-    
+    const { userid, branchName, date, time, fullName, phoneNumber, status } = req.body;
     const booking = new Booking({
       userid,
       branchName,
@@ -204,9 +203,7 @@ router.post('/bookings', async (req, res) => {
       time,
       fullName,
       phoneNumber,
-      status,
-      promoCode,
-      discountPercentage
+      status
     });
     
     await booking.save();
@@ -239,6 +236,8 @@ router.get('/bookings/user/:userid', async (req, res) => {
   const bookings = await Booking.find({userid: req.params.userid}).sort({ createdAt: 1 });
   res.json(bookings);
 });
+//gifts/user/:userid
+//notifications/user/:userid
 
 // Get a specific booking by ID
 router.get('/bookings/:id', async (req, res) => {
@@ -256,8 +255,7 @@ router.get('/bookings/:id', async (req, res) => {
 // Update a booking by ID
 router.put('/bookings/:id', async (req, res) => {
   try {
-    const { branchName, date, time, fullName, phoneNumber, status, promoCode, discountPercentage } = req.body;
-    
+    const { branchName, date, time, fullName, phoneNumber, status, promoCode, discountPercentage } = req.body;  
     const updatedBooking = await Booking.findByIdAndUpdate(req.params.id, {
       branchName,
       date,

@@ -1,43 +1,55 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { newsService } from '@/services/api';
+import type { News } from '@/services/api/types';
+import { Calendar } from 'lucide-react-native';
 
 const WINDOW_WIDTH = Dimensions.get('window').width;
 const NEWS_CARD_HEIGHT = (WINDOW_WIDTH - 32) * 0.6;
 
-const newsItems = [
-  {
-    id: 1,
-    title: 'New IMAX Theater Opening Soon',
-    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&q=80',
-    date: 'March 20, 2024',
-    description: 'Experience movies like never before in our state-of-the-art IMAX theater.',
-  },
-  {
-    id: 2,
-    title: 'Special Movie Marathon Weekend',
-    image: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=800&q=80',
-    date: 'March 25, 2024',
-    description: 'Join us for an epic movie marathon featuring classic blockbusters.',
-  },
-  {
-    id: 3,
-    title: 'Exclusive Preview Screenings',
-    image: 'https://images.unsplash.com/photo-1585647347483-22b66260dfff?w=800&q=80',
-    date: 'March 30, 2024',
-    description: 'Be among the first to watch upcoming releases before they hit theaters.',
-  },
-  {
-    id: 4,
-    title: 'New Food Menu Launch',
-    image: 'https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?w=800&q=80',
-    date: 'April 5, 2024',
-    description: 'Discover our new gourmet menu items perfect for your movie experience.',
-  },
-];
-
 export default function NewsScreen() {
   const router = useRouter();
+  const [newsItems, setNewsItems] = useState<News[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchNews();
+  }, []);
+
+  const fetchNews = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await newsService.getNews();
+      setNewsItems(response || []);
+    } catch (err) {
+      setError('Failed to load news. Please try again later.');
+      console.error('Error fetching news:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ED188D" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchNews}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -48,16 +60,19 @@ export default function NewsScreen() {
       >
         {newsItems.map((item) => (
           <TouchableOpacity 
-            key={item.id} 
+            key={item._id} 
             style={styles.newsCard}
-            onPress={() => router.push(`/news/${item.id}`)}
+            onPress={() => router.push(`/news/${item._id}`)}
           >
             <Image 
               source={{ uri: item.image }}
               style={styles.newsImage}
             />
             <View style={styles.newsContent}>
-              <Text style={styles.newsDate}>{item.date}</Text>
+              <View style={styles.dateContainer}>
+                <Calendar size={16} color="#ED188D" />
+                <Text style={styles.newsDate}>{item.date}</Text>
+              </View>
               <Text style={styles.newsTitle}>{item.title}</Text>
               <Text style={styles.newsDescription} numberOfLines={2}>
                 {item.description}
@@ -84,6 +99,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#ED188D',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   newsList: {
     flex: 1,
   },
@@ -108,6 +153,7 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.8))',
   },
   newsContent: {
     position: 'absolute',
@@ -117,10 +163,15 @@ const styles = StyleSheet.create({
     padding: 16,
     zIndex: 1,
   },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
   newsDate: {
     color: '#ED188D',
     fontSize: 14,
-    marginBottom: 4,
   },
   newsTitle: {
     color: '#FFFFFF',

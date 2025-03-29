@@ -1,53 +1,59 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions, Linking } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions, Linking, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { branchService } from '@/services/api';
+import type { Branch } from '@/services/api/types';
 
 const WINDOW_WIDTH = Dimensions.get('window').width;
 
-// Extended branch data with additional details
-const branchesData = {
-  1: {
-    _id: 1,
-    name: 'Downtown Branch',
-    address: 'abc xyz sdf ghi kmn',
-    googleMapsUrl: 'https://maps.google.com/?q=Downtown+Branch',
-    images: [
-      'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=800&q=80',
-      'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&q=80',
-    ],
-  },
-  2: {
-    id: 2,
-    name: 'Westside Cinema',
-    address: '123 Cinema Street, West District',
-    googleMapsUrl: 'https://maps.google.com/?q=Westside+Cinema',
-    images: [
-      'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=800&q=80',
-      'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&q=80',
-    ],
-  },
-  // Add more branches with their details...
-};
-
 export default function BranchDetailsScreen() {
   const { id } = useLocalSearchParams();
-  const branch = branchesData[id as keyof typeof branchesData];
+  const [branch, setBranch] = useState<Branch | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!branch) {
+  useEffect(() => {
+    fetchBranchDetails();
+  }, [id]);
+
+  const fetchBranchDetails = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await branchService.getBranch(id as string);
+      setBranch(response);
+    } catch (err) {
+      setError('Failed to load branch details. Please try again later.');
+      console.error('Error fetching branch details:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openGoogleMaps = () => {
+    if (branch?.googleMapsUrl) {
+      Linking.openURL(branch.googleMapsUrl);
+    }
+  };
+
+  if (loading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Branch not found</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ED188D" />
       </View>
     );
   }
 
-  const openGoogleMaps = () => {
-    Linking.openURL(branch.googleMapsUrl);
-  };
-
-  const handleBooking = () => {
-    // Implement booking functionality
-  };
+  if (error || !branch) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error || 'Branch not found'}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchBranchDetails}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -63,9 +69,11 @@ export default function BranchDetailsScreen() {
       <View style={styles.section}>
         <Text style={styles.addressLabel}>Specific address:</Text>
         <Text style={styles.addressText}>{branch.address}</Text>
-        <TouchableOpacity onPress={openGoogleMaps}>
-          <Text style={styles.mapLink}>Link Google Map</Text>
-        </TouchableOpacity>
+        {branch.googleMapsUrl && (
+          <TouchableOpacity onPress={openGoogleMaps}>
+            <Text style={styles.mapLink}>Link Google Map</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Facility Images */}
@@ -82,7 +90,7 @@ export default function BranchDetailsScreen() {
       </View>
 
       {/* Booking Button */}
-      <TouchableOpacity style={styles.bookingButton} onPress={handleBooking}>
+      <TouchableOpacity style={styles.bookingButton}>
         <Text style={styles.bookingButtonText}>BOOKING ROOM (ĐẶT PHÒNG)</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -93,6 +101,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#ED188D',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   mainImageContainer: {
     width: WINDOW_WIDTH,
@@ -155,11 +193,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  errorText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 24,
   },
 });

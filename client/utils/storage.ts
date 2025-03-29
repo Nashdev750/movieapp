@@ -1,7 +1,21 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
+// Custom UUID generation that works in all environments
+function generateUUID() {
+  let d = new Date().getTime();
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    d += performance.now(); // use high-precision timer if available
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = (d + Math.random() * 16) % 16 | 0;
+    d = Math.floor(d / 16);
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 type UserData = {
+  id: string;
   name: string;
   phone: string;
 };
@@ -30,12 +44,21 @@ const webStorage = {
 };
 
 // Use appropriate storage based on platform
-const storage = Platform.OS === 'web' ? webStorage : SecureStore;
+const storage = SecureStore;
 
-export async function saveUserData(data: UserData) {
+export async function saveUserData(data: Omit<UserData, 'id'>) {
   try {
-    await storage.setItemAsync(USER_DATA_KEY, JSON.stringify(data));
-    return true;
+    // Get existing data first
+    const existingData = await getUserData();
+    const userId = existingData?.id || generateUUID(); // Generate new UUID only if it doesn't exist
+
+    const updatedData = {
+      id: userId,
+      ...data
+    };
+
+    await storage.setItemAsync(USER_DATA_KEY, JSON.stringify(updatedData));
+    return userId;
   } catch (error) {
     console.error('Error saving user data:', error);
     return false;

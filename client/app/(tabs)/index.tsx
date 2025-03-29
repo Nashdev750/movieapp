@@ -1,7 +1,17 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+  ActivityIndicator,
+} from 'react-native';
 import { Menu, User } from 'lucide-react-native';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import Animated, { 
   useAnimatedScrollHandler,
   useSharedValue,
@@ -10,6 +20,8 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import ImageViewer from '@/components/ImageViewer';
+import { movieService, menuService, branchService, newsService } from '@/services/api';
+import type { Movie, MenuItem, Branch, News } from '@/services/api/types';
 
 const WINDOW_WIDTH = Dimensions.get('window').width;
 const CARD_WIDTH = WINDOW_WIDTH * 0.7;
@@ -23,103 +35,7 @@ const NEWS_CARD_WIDTH = WINDOW_WIDTH * 0.85;
 const NEWS_CARD_HEIGHT = NEWS_CARD_WIDTH * 0.6;
 const CENTER_OFFSET = (WINDOW_WIDTH - CARD_WIDTH) / 2;
 
-const movies = [
-  {
-    id: 1,
-    title: 'Inception',
-    image: 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=500&q=80'
-  },
-  {
-    id: 2,
-    title: 'The Dark Knight',
-    image: 'https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=500&q=80'
-  },
-  {
-    id: 3,
-    title: 'Interstellar',
-    image: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&q=80'
-  },
-  {
-    id: 4,
-    title: 'Pulp Fiction',
-    image: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&q=80'
-  },
-  {
-    id: 5,
-    title: 'The Matrix',
-    image: 'https://images.unsplash.com/photo-1535016120720-40c646be5580?w=500&q=80'
-  }
-];
-
-const menuItems = [
-  {
-    id: 1,
-    name: 'Gourmet Popcorn Combo',
-    price: '$12.99',
-    image: 'https://images.unsplash.com/photo-1585647347483-22b66260dfff?w=800&q=80',
-  },
-  {
-    id: 2,
-    name: 'Nachos Supreme',
-    price: '$14.99',
-    image: 'https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?w=800&q=80',
-  },
-  {
-    id: 3,
-    name: 'Movie Snack Bundle',
-    price: '$19.99',
-    image: 'https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=800&q=80',
-  }
-];
-
-const branchItems = [
-  {
-    id: 1,
-    name: 'Downtown Branch',
-    image: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=800&q=80',
-  },
-  {
-    id: 2,
-    name: 'Westside Cinema',
-    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&q=80',
-  },
-  {
-    id: 3,
-    name: 'Central Movies',
-    image: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=800&q=80',
-  },
-  {
-    id: 4,
-    name: 'Harbor Theater',
-    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&q=80',
-  }
-];
-
-const newsItems = [
-  {
-    id: 1,
-    title: 'New IMAX Theater Opening Soon',
-    description: 'Experience movies like never before in our state-of-the-art IMAX theater.',
-    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&q=80',
-    date: 'March 20, 2024'
-  },
-  {
-    id: 2,
-    title: 'Special Movie Marathon Weekend',
-    description: 'Join us for an epic movie marathon featuring classic blockbusters.',
-    image: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=800&q=80',
-    date: 'March 25, 2024'
-  },
-  {
-    id: 3,
-    title: 'Exclusive Preview Screenings',
-    description: 'Be among the first to watch upcoming releases before they hit theaters.',
-    image: 'https://images.unsplash.com/photo-1585647347483-22b66260dfff?w=800&q=80',
-    date: 'March 30, 2024'
-  }
-];
-
-function MovieCard({ movie, index, scrollX }) {
+function MovieCard({ movie, index, scrollX, onPress }) {
   const inputRange = [
     (index - 2) * (CARD_WIDTH + SPACING),
     (index - 1) * (CARD_WIDTH + SPACING),
@@ -150,9 +66,11 @@ function MovieCard({ movie, index, scrollX }) {
   });
 
   return (
-    <Animated.View style={[styles.movieCard, animatedStyle]}>
-      <Image source={{ uri: movie.image }} style={styles.movieImage} />
-    </Animated.View>
+    <TouchableOpacity onPress={() => onPress(movie._id)}>
+      <Animated.View style={[styles.movieCard, animatedStyle]}>
+        <Image source={{ uri: movie.image }} style={styles.movieImage} />
+      </Animated.View>
+    </TouchableOpacity>
   );
 }
 
@@ -185,56 +103,28 @@ function MenuCard({ item, onPress }) {
 }
 
 function BranchCard({ item, onPress }) {
-  const imageRef = useRef();
-  const [layout, setLayout] = useState(null);
-
-  const measureLayout = () => {
-    imageRef.current?.measure((x, y, width, height, pageX, pageY) => {
-      setLayout({ x: pageX, y: pageY, width, height });
-    });
-  };
-
   return (
     <TouchableOpacity 
       style={styles.branchCard}
-      onPress={() => {
-        measureLayout();
-        onPress(item.image, layout);
-      }}
+      onPress={() => onPress(item._id)}
     >
       <Image 
-        ref={imageRef}
-        source={{ uri: item.image }} 
+        source={{ uri: item.images[0] }} 
         style={styles.branchImage}
-        onLayout={measureLayout}
       />
     </TouchableOpacity>
   );
 }
 
 function NewsCard({ item, onPress }) {
-  const imageRef = useRef();
-  const [layout, setLayout] = useState(null);
-
-  const measureLayout = () => {
-    imageRef.current?.measure((x, y, width, height, pageX, pageY) => {
-      setLayout({ x: pageX, y: pageY, width, height });
-    });
-  };
-
   return (
     <TouchableOpacity 
       style={styles.newsCard}
-      onPress={() => {
-        measureLayout();
-        onPress(item.image, layout);
-      }}
+      onPress={() => onPress(item._id)}
     >
       <Image 
-        ref={imageRef}
         source={{ uri: item.image }} 
         style={styles.newsImage}
-        onLayout={measureLayout}
       />
     </TouchableOpacity>
   );
@@ -242,11 +132,29 @@ function NewsCard({ item, onPress }) {
 
 export default function HomeScreen() {
   const navigation = useNavigation();
+  const router = useRouter();
   const scrollX = useSharedValue(0);
   const scrollViewRef = useRef(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imageLayout, setImageLayout] = useState(null);
   const [isImageViewerVisible, setIsImageViewerVisible] = useState(false);
+
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [newsItems, setNewsItems] = useState<News[]>([]);
+  const [loading, setLoading] = useState({
+    movies: true,
+    menu: true,
+    branches: true,
+    news: true,
+  });
+  const [error, setError] = useState({
+    movies: null,
+    menu: null,
+    branches: null,
+    news: null,
+  });
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -268,14 +176,74 @@ export default function HomeScreen() {
     setIsImageViewerVisible(false);
   };
 
+  const handleMoviePress = (movieId: string) => {
+    router.push(`/movies/${movieId}`);
+  };
+
+  const handleBranchPress = (branchId: string) => {
+    router.push(`/branch/${branchId}`);
+  };
+
+  const handleNewsPress = (newsId: string) => {
+    router.push(`/news/${newsId}`);
+  };
+
+  const fetchData = async () => {
+    try {
+      const moviesResponse = await movieService.getMovies();
+      setMovies(moviesResponse || []);
+    } catch (err) {
+      setError(prev => ({ ...prev, movies: 'Failed to load movies' }));
+      console.error('Error fetching movies:', err);
+    } finally {
+      setLoading(prev => ({ ...prev, movies: false }));
+    }
+
+    try {
+      const menuResponse = await menuService.getMenuItems();
+      setMenuItems(menuResponse || []);
+    } catch (err) {
+      setError(prev => ({ ...prev, menu: 'Failed to load menu items' }));
+      console.error('Error fetching menu items:', err);
+    } finally {
+      setLoading(prev => ({ ...prev, menu: false }));
+    }
+
+    try {
+      const branchesResponse = await branchService.getBranches();
+      setBranches(branchesResponse || []);
+    } catch (err) {
+      setError(prev => ({ ...prev, branches: 'Failed to load branches' }));
+      console.error('Error fetching branches:', err);
+    } finally {
+      setLoading(prev => ({ ...prev, branches: false }));
+    }
+
+    try {
+      const newsResponse = await newsService.getNews();
+      setNewsItems(newsResponse || []);
+    } catch (err) {
+      setError(prev => ({ ...prev, news: 'Failed to load news' }));
+      console.error('Error fetching news:', err);
+    } finally {
+      setLoading(prev => ({ ...prev, news: false }));
+    }
+  };
+
   useEffect(() => {
-    setTimeout(() => {
-      scrollViewRef.current?.scrollTo({
-        x: CARD_WIDTH + SPACING,
-        animated: false,
-      });
-    }, 100);
+    fetchData();
   }, []);
+
+  useEffect(() => {
+    if (movies.length > 0) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({
+          x: CARD_WIDTH + SPACING,
+          animated: false,
+        });
+      }, 100);
+    }
+  }, [movies]);
 
   return (
     <View style={styles.container}>
@@ -294,95 +262,123 @@ export default function HomeScreen() {
 
       <ScrollView style={styles.content}>
         <View style={styles.movieSection}>
-          <Animated.ScrollView
-            ref={scrollViewRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.movieList}
-            snapToInterval={CARD_WIDTH + SPACING}
-            decelerationRate="fast"
-            onScroll={scrollHandler}
-            scrollEventThrottle={16}
-            bounces={false}
+          {loading.movies ? (
+            <ActivityIndicator size="large" color="#ED188D" />
+          ) : error.movies ? (
+            <Text style={styles.errorText}>{error.movies}</Text>
+          ) : (
+            <Animated.ScrollView
+              ref={scrollViewRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.movieList}
+              snapToInterval={CARD_WIDTH + SPACING}
+              decelerationRate="fast"
+              onScroll={scrollHandler}
+              scrollEventThrottle={16}
+              bounces={false}
+            >
+              {movies.map((movie, index) => (
+                <MovieCard
+                  key={movie._id}
+                  movie={movie}
+                  index={index}
+                  scrollX={scrollX}
+                  onPress={handleMoviePress}
+                />
+              ))}
+            </Animated.ScrollView>
+          )}
+          <TouchableOpacity 
+            style={styles.movieListButton}
+            onPress={() => router.push('/movies')}
           >
-            {movies.map((movie, index) => (
-              <MovieCard
-                key={movie.id}
-                movie={movie}
-                index={index}
-                scrollX={scrollX}
-              />
-            ))}
-          </Animated.ScrollView>
-          <TouchableOpacity style={styles.movieListButton}>
             <Text style={styles.movieListButtonText}>Danh sách phim (Movie List)</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Menu food - drink</Text>
-            <TouchableOpacity>
+            <Text style={styles.sectionTitle}>Our Branches</Text>
+            <TouchableOpacity onPress={() => router.push('/branch')}>
               <Text style={styles.seeAll}>See All</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.menuContainer}
-          >
-            {menuItems.map((item) => (
-              <MenuCard 
-                key={item.id} 
-                item={item}
-                onPress={handleImagePress}
-              />
-            ))}
-          </ScrollView>
+          {loading.branches ? (
+            <ActivityIndicator size="large" color="#ED188D" />
+          ) : error.branches ? (
+            <Text style={styles.errorText}>{error.branches}</Text>
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.branchContainer}
+            >
+              {branches.map((item) => (
+                <BranchCard 
+                  key={item._id} 
+                  item={item}
+                  onPress={handleBranchPress}
+                />
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Our Branches</Text>
-            <TouchableOpacity>
+            <Text style={styles.sectionTitle}>Menu food - drink</Text>
+            <TouchableOpacity onPress={() => router.push('/menu')}>
               <Text style={styles.seeAll}>See All</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.branchContainer}
-          >
-            {branchItems.map((item) => (
-              <BranchCard 
-                key={item.id} 
-                item={item}
-                onPress={handleImagePress}
-              />
-            ))}
-          </ScrollView>
+          {loading.menu ? (
+            <ActivityIndicator size="large" color="#ED188D" />
+          ) : error.menu ? (
+            <Text style={styles.errorText}>{error.menu}</Text>
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.menuContainer}
+            >
+              {menuItems.map((item) => (
+                <MenuCard 
+                  key={item._id} 
+                  item={item}
+                  onPress={handleImagePress}
+                />
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Latest News</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/news')}>
               <Text style={styles.seeAll}>See All</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.newsContainer}
-          >
-            {newsItems.map((item) => (
-              <NewsCard 
-                key={item.id} 
-                item={item}
-                onPress={handleImagePress}
-              />
-            ))}
-          </ScrollView>
+          {loading.news ? (
+            <ActivityIndicator size="large" color="#ED188D" />
+          ) : error.news ? (
+            <Text style={styles.errorText}>{error.news}</Text>
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.newsContainer}
+            >
+              {newsItems.map((item) => (
+                <NewsCard 
+                  key={item._id} 
+                  item={item}
+                  onPress={handleNewsPress}
+                />
+              ))}
+            </ScrollView>
+          )}
         </View>
       </ScrollView>
 
@@ -529,5 +525,11 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
-  }
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    textAlign: 'center',
+    marginVertical: 16,
+  },
 });

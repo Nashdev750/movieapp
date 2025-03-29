@@ -6,8 +6,21 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, Linking } from 'react-
 import { Box, Phone, List, Building2, Coffee, Newspaper } from 'lucide-react-native';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { getUserData } from '@/utils/storage';
+import React, { useState } from 'react';
 
 function CustomDrawerContent(props) {
+  const [userData, setUserData] = useState(null);
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    const data = await getUserData();
+    setUserData(data);
+  };
+
   const menuItems = [
     {
       icon: <Box size={24} color="#FF0099" />,
@@ -39,7 +52,14 @@ function CustomDrawerContent(props) {
     <View style={styles.drawerContainer}>
       <View style={styles.profileSection}>
         <View style={styles.profileImage} />
-        <Text style={styles.phoneNumber}>0878216789 (phone)</Text>
+        {userData ? (
+          <>
+            <Text style={styles.userName}>{userData.name}</Text>
+            <Text style={styles.phoneNumber}>{userData.phone}</Text>
+          </>
+        ) : (
+          <Text style={styles.noUserText}>Welcome Guest</Text>
+        )}
       </View>
 
       <View style={styles.menuSection}>
@@ -115,9 +135,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#333333',
     marginBottom: 12,
   },
+  userName: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
   phoneNumber: {
     color: '#FFFFFF',
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  noUserText: {
+    color: '#FFFFFF',
     fontSize: 16,
+    opacity: 0.7,
   },
   menuSection: {
     paddingHorizontal: 16,

@@ -1,6 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { movieService } from '@/services/api';
+import type { Movie } from '@/services/api/types';
 
 const WINDOW_WIDTH = Dimensions.get('window').width;
 const MOVIE_CARD_WIDTH = (WINDOW_WIDTH - 48) / 3;
@@ -14,57 +16,49 @@ const categories = [
   { id: 'horror', label: 'Horror' },
 ];
 
-const movies = [
-  {
-    id: 1,
-    title: 'Inception',
-    image: 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=500&q=80',
-  },
-  {
-    id: 2,
-    title: 'The Dark Knight',
-    image: 'https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=500&q=80',
-  },
-  {
-    id: 3,
-    title: 'Interstellar',
-    image: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&q=80',
-  },
-  {
-    id: 4,
-    title: 'Pulp Fiction',
-    image: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&q=80',
-  },
-  {
-    id: 5,
-    title: 'The Matrix',
-    image: 'https://images.unsplash.com/photo-1535016120720-40c646be5580?w=500&q=80',
-  },
-  {
-    id: 6,
-    title: 'Forrest Gump',
-    image: 'https://images.unsplash.com/photo-1542204165-65bf26472b9b?w=500&q=80',
-  },
-  {
-    id: 7,
-    title: 'The Shawshank Redemption',
-    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80',
-  },
-  {
-    id: 8,
-    title: 'Goodfellas',
-    image: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=500&q=80',
-  },
-  {
-    id: 9,
-    title: 'The Godfather',
-    image: 'https://images.unsplash.com/photo-1585647347483-22b66260dfff?w=500&q=80',
-  },
-];
-
 export default function MovieListScreen() {
-  const [selectedCategory, setSelectedCategory] = React.useState('new');
+  const [selectedCategory, setSelectedCategory] = useState('new');
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    fetchMovies();
+  }, []);
+
+  const fetchMovies = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await movieService.getMovies();
+      setMovies(response || []);
+    } catch (err) {
+      setError('Failed to load movies. Please try again later.');
+      console.error('Error fetching movies:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ED188D" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchMovies}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -96,10 +90,10 @@ export default function MovieListScreen() {
       <ScrollView style={styles.moviesContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.moviesGrid}>
           {movies.map((movie) => (
-            <View key={movie.id} style={styles.movieContainer}>
+            <View key={movie._id} style={styles.movieContainer}>
               <TouchableOpacity 
                 style={styles.movieCard}
-                onPress={() => router.push(`/movies/${movie.id}`)}
+                onPress={() => router.push(`/movies/${movie._id}`)}
               >
                 <Image source={{ uri: movie.image }} style={styles.movieImage} />
               </TouchableOpacity>
@@ -118,6 +112,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#ED188D',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   categoriesContainer: {
     height: 40,

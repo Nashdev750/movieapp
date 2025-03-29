@@ -10,9 +10,10 @@ import {
   SafeAreaView,
   TextInput,
   KeyboardAvoidingView,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import DropDownPicker from 'react-native-dropdown-picker';
 import { format, addDays, setHours, setMinutes } from 'date-fns';
 import { MapPin, Calendar, Clock, CreditCard as Edit2, ArrowLeft } from 'lucide-react-native';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
@@ -20,18 +21,14 @@ import BottomSheet from '@/components/BottomSheet';
 import OTPInput from '@/components/OTPInput';
 import BookingSuccess from '@/components/BookingSuccess';
 import { getUserData, saveUserData } from '@/utils/storage';
+import { branchService, bookingService } from '@/services/api';
+import type { Branch } from '@/services/api/types';
 
 const WINDOW_WIDTH = Dimensions.get('window').width;
 const TIME_SLOT_WIDTH = (WINDOW_WIDTH - 48) / 3;
 const DATE_CARD_WIDTH = WINDOW_WIDTH * 0.3;
-
-const branches = [
-  { label: 'Downtown Branch', value: 'downtown' },
-  { label: 'Westside Cinema', value: 'westside' },
-  { label: 'Central Movies', value: 'central' },
-  { label: 'Harbor Theater', value: 'harbor' },
-  { label: 'Eastside Cinema', value: 'eastside' },
-];
+const BRANCH_CARD_WIDTH = WINDOW_WIDTH * 0.45;
+const BRANCH_CARD_HEIGHT = BRANCH_CARD_WIDTH * 0.6;
 
 const availableDates = Array.from({ length: 7 }, (_, i) => {
   const date = addDays(new Date(), i);
@@ -65,9 +62,24 @@ const generateTimeSlots = () => {
   return slots;
 };
 
+function BranchCard({ branch, isSelected, onSelect }) {
+  return (
+    <TouchableOpacity
+      style={[styles.branchCard, isSelected && styles.branchCardSelected]}
+      onPress={() => onSelect(branch._id)}
+    >
+      <Image source={{ uri: branch.images[0] }} style={styles.branchImage} />
+      <View style={styles.branchContent}>
+        <Text style={styles.branchName} numberOfLines={1}>{branch.name}</Text>
+        <Text style={styles.branchAddress} numberOfLines={1}>{branch.address}</Text>
+      </View>
+      <View style={[styles.branchOverlay, isSelected && styles.branchOverlaySelected]} />
+    </TouchableOpacity>
+  );
+}
+
 export default function BookingScreen() {
   const router = useRouter();
-  const [branchOpen, setBranchOpen] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
@@ -82,13 +94,32 @@ export default function BookingScreen() {
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [resendDisabled, setResendDisabled] = useState(false);
   const [resendTimer, setResendTimer] = useState(30);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [branchesError, setBranchesError] = useState<string | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const timeSlots = useMemo(() => generateTimeSlots(), []);
 
   useEffect(() => {
     loadUserData();
+    fetchBranches();
   }, []);
+
+  const fetchBranches = async () => {
+    try {
+      setBranchesLoading(true);
+      setBranchesError(null);
+      const response = await branchService.getBranches();
+      setBranches(response || []);
+    } catch (err) {
+      setBranchesError('Failed to load branches. Please try again.');
+      console.error('Error fetching branches:', err);
+    } finally {
+      setBranchesLoading(false);
+    }
+  };
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -114,11 +145,6 @@ export default function BookingScreen() {
 
   const isFormValid = selectedBranch && selectedDate && selectedTime;
 
-  const handleBranchChange = (value: any) => {
-    setSelectedBranch(value);
-    setBranchOpen(false);
-  };
-
   const handleDateSelect = (date: string) => {
     setSelectedDate(date);
   };
@@ -141,16 +167,52 @@ export default function BookingScreen() {
     bottomSheetRef.current?.present();
   }, [selectedBranch, selectedDate, selectedTime]);
 
+  const createBooking = async () => {
+    try {
+      setLoading(true);
+      setBookingError(null);
+
+      const selectedBranchData = branches.find(b => b._id === selectedBranch);
+      if (!selectedBranchData) {
+        throw new Error('Selected branch not found');
+      }
+     
+      const userData = await getUserData();
+      let userid = userData?.userId
+      if(!userid){
+        userid = await saveUserData({name, phone})
+      }
+      const bookingData = {
+        userid: userid,
+        branchName: selectedBranchData.name,
+        date: selectedDate,
+        time: selectedTime,
+        fullName: name,
+        phoneNumber: phone,
+        status: 0
+      };
+
+      console.log(bookingData)
+
+      await bookingService.createBooking(bookingData);
+      setShowSuccess(true);
+      bottomSheetRef.current?.dismiss();
+    } catch (err) {
+      console.error('Error creating booking:', err);
+      setBookingError('Failed to create booking. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleConfirmBooking = async () => {
     if (!name || !phone) return;
 
     setLoading(true);
 
     if (phone === savedPhone || !savedPhone) {
-      await saveUserData({ name, phone });
-      setLoading(false);
-      setShowSuccess(true);
-      bottomSheetRef.current?.dismiss();
+      await saveUserData({name, phone });
+      createBooking();
       return;
     }
 
@@ -178,8 +240,7 @@ export default function BookingScreen() {
     setTimeout(() => {
       if (otp === '123456') {
         setLoading(false);
-        bottomSheetRef.current?.dismiss();
-        setShowSuccess(true);
+        createBooking();
         setOtpError(false);
         setSavedPhone(phone);
       } else {
@@ -201,10 +262,11 @@ export default function BookingScreen() {
   };
 
   if (showSuccess) {
+    const selectedBranchData = branches.find(b => b._id === selectedBranch);
     return (
       <BookingSuccess
         bookingDetails={{
-          branch: branches.find(b => b.value === selectedBranch)?.label || '',
+          branch: selectedBranchData?.name || '',
           date: format(new Date(selectedDate), 'MMMM d, yyyy'),
           time: selectedTime,
           name,
@@ -241,31 +303,33 @@ export default function BookingScreen() {
                 <MapPin size={20} color="#FF0099" />
                 <Text style={styles.label}>Select Branch</Text>
               </View>
-              <DropDownPicker
-                open={branchOpen}
-                value={selectedBranch}
-                items={branches}
-                setOpen={setBranchOpen}
-                setValue={handleBranchChange}
-                searchable={true}
-                searchPlaceholder="Search branches..."
-                placeholder="Select a branch"
-                style={styles.dropdown}
-                textStyle={styles.dropdownText}
-                dropDownContainerStyle={styles.dropdownContainer}
-                searchContainerStyle={styles.searchContainer}
-                searchTextInputStyle={styles.searchInput}
-                placeholderStyle={styles.placeholder}
-                selectedItemContainerStyle={styles.selectedItem}
-                selectedItemLabelStyle={styles.selectedItemLabel}
-                listItemContainerStyle={styles.listItem}
-                listItemLabelStyle={styles.listItemLabel}
-                zIndex={3000}
-                listMode="SCROLLVIEW"
-                scrollViewProps={{
-                  nestedScrollEnabled: true,
-                }}
-              />
+              {branchesLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#ED188D" />
+                </View>
+              ) : branchesError ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{branchesError}</Text>
+                  <TouchableOpacity style={styles.retryButton} onPress={fetchBranches}>
+                    <Text style={styles.retryButtonText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.branchScrollContent}
+                >
+                  {branches.map((branch) => (
+                    <BranchCard
+                      key={branch._id}
+                      branch={branch}
+                      isSelected={selectedBranch === branch._id}
+                      onSelect={setSelectedBranch}
+                    />
+                  ))}
+                </ScrollView>
+              )}
             </View>
 
             <View style={styles.fieldContainer}>
@@ -396,6 +460,10 @@ export default function BookingScreen() {
                   )}
                 </View>
 
+                {bookingError && (
+                  <Text style={styles.bookingErrorText}>{bookingError}</Text>
+                )}
+
                 <TouchableOpacity
                   style={[styles.confirmButton, loading && styles.loadingButton]}
                   onPress={handleConfirmBooking}
@@ -470,7 +538,7 @@ export default function BookingScreen() {
                         error={otpError}
                       />
                       {otpError && (
-                        <Text style={styles.errorText}>Invalid OTP. Please try again.</Text>
+                        <Text style={styles.otpErrorText}>Invalid OTP. Please try again.</Text>
                       )}
                     </View>
 
@@ -557,52 +625,84 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '500',
   },
-  dropdown: {
-    backgroundColor: '#1A1A1A',
+  loadingContainer: {
+    height: BRANCH_CARD_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    height: BRANCH_CARD_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  retryButton: {
+    backgroundColor: '#ED188D',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  branchScrollContent: {
+    paddingVertical: 8,
+    gap: 8,
+    paddingHorizontal: 8,
+  },
+  branchCard: {
+    width: BRANCH_CARD_WIDTH,
+    height: BRANCH_CARD_HEIGHT,
+    borderRadius: 12,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#333333',
-    borderRadius: 12,
-    height: 50,
-  },
-  dropdownText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-  },
-  dropdownContainer: {
+    marginRight: 8,
     backgroundColor: '#1A1A1A',
-    borderWidth: 1,
-    borderColor: '#333333',
-    borderRadius: 12,
-    marginTop: 8,
   },
-  searchContainer: {
-    backgroundColor: '#1A1A1A',
-    borderBottomColor: '#333333',
+  branchCardSelected: {
+    borderColor: '#FF0099',
+    borderWidth: 2,
   },
-  searchInput: {
-    backgroundColor: '#262626',
+  branchImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  branchContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 12,
+    zIndex: 1,
+  },
+  branchName: {
     color: '#FFFFFF',
-    borderRadius: 8,
-    borderColor: '#333333',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 2,
   },
-  placeholder: {
-    color: '#666666',
-    fontSize: 16,
-  },
-  selectedItem: {
-    backgroundColor: '#262626',
-  },
-  selectedItemLabel: {
-    color: '#FF0099',
-    fontWeight: '500',
-  },
-  listItem: {
-    backgroundColor: '#1A1A1A',
-    borderBottomColor: '#333333',
-    borderBottomWidth: 1,
-  },
-  listItemLabel: {
+  branchAddress: {
     color: '#FFFFFF',
+    fontSize: 12,
+    opacity: 0.8,
+  },
+  branchOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.8))',
+  },
+  branchOverlaySelected: {
+    backgroundColor: 'rgba(255,0,153,0.1)',
+    backgroundImage: 'linear-gradient(to bottom, transparent, rgba(255,0,153,0.3))',
   },
   dateScrollContent: {
     paddingVertical: 8,
@@ -746,10 +846,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 24,
   },
-  errorText: {
+  otpErrorText: {
     color: '#FF4444',
     fontSize: 14,
     marginTop: 8,
+  },
+  bookingErrorText: {
+    color: '#FF4444',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 8,
   },
   otpHeader: {
     flexDirection: 'row',

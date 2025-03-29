@@ -1,78 +1,117 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { Menu, User, Bell, Gift, Ticket, Calendar, Star } from 'lucide-react-native';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { notificationService } from '@/services/api';
+import { getUserData } from '@/utils/storage';
+import type { Notification } from '@/services/api/types';
 
 const WINDOW_WIDTH = Dimensions.get('window').width;
 
-const notifications = [
-  {
-    id: 1,
-    type: 'promo',
-    title: 'Special Weekend Offer!',
-    message: 'Get 20% off on all movie tickets this weekend.',
-    time: '2 hours ago',
-    icon: Gift,
-    color: '#FF6B6B',
-    isNew: true,
-  },
-  {
-    id: 2,
-    type: 'booking',
-    title: 'Booking Confirmed',
-    message: 'Your booking for "Inception" has been confirmed for tomorrow at 7:30 PM.',
-    time: '5 hours ago',
-    icon: Ticket,
-    color: '#4ECDC4',
-    isNew: true,
-  },
-  {
-    id: 3,
-    type: 'event',
-    title: 'Upcoming Movie Premiere',
-    message: 'Don\'t miss the exclusive premiere of "The Dark Knight" next week.',
-    time: '1 day ago',
-    icon: Calendar,
-    color: '#FFD93D',
-  },
-  {
-    id: 4,
-    type: 'reward',
-    title: 'You\'ve Earned Points!',
-    message: 'Earned 500 points from your last visit. Check your rewards now!',
-    time: '2 days ago',
-    icon: Star,
-    color: '#6C5CE7',
-  },
-  {
-    id: 5,
-    type: 'promo',
-    title: 'Member Exclusive Deal',
-    message: 'Members get free popcorn upgrade this month.',
-    time: '3 days ago',
-    icon: Gift,
-    color: '#FF6B6B',
-  },
-];
+const NotificationIcons = {
+  promo: Gift,
+  booking: Ticket,
+  event: Calendar,
+  reward: Star,
+};
+
+const NotificationColors = {
+  promo: '#FF6B6B',
+  booking: '#4ECDC4',
+  event: '#FFD93D',
+  reward: '#6C5CE7',
+};
 
 export default function NotificationsScreen() {
   const navigation = useNavigation();
-  const [readNotifications, setReadNotifications] = React.useState<number[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [readNotifications, setReadNotifications] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const openDrawer = () => {
     navigation.dispatch(DrawerActions.openDrawer());
   };
 
-  const markAsRead = (id: number) => {
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const userData = await getUserData();
+      
+      if (!userData?.id) {
+        setError('Please log in to view notifications');
+        return;
+      }
+
+      const response = await notificationService.getUserNotifications(userData.id);
+      setNotifications(response || []);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+      setError('Failed to load notifications. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const markAsRead = (id: string) => {
     setReadNotifications(prev => [...prev, id]);
   };
 
-  const unreadCount = notifications.filter(n => !readNotifications.includes(n.id) && n.isNew).length;
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={openDrawer}>
+            <Menu color="#FFFFFF" size={24} />
+          </TouchableOpacity>
+          <Image 
+            source={{ uri: 'https://raw.githubusercontent.com/stackblitz/webcontainer-core/main/examples/cinema-logo.png' }}
+            style={styles.logo}
+          />
+          <TouchableOpacity>
+            <User color="#FFFFFF" size={24} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading notifications...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={openDrawer}>
+            <Menu color="#FFFFFF" size={24} />
+          </TouchableOpacity>
+          <Image 
+            source={{ uri: 'https://raw.githubusercontent.com/stackblitz/webcontainer-core/main/examples/cinema-logo.png' }}
+            style={styles.logo}
+          />
+          <TouchableOpacity>
+            <User color="#FFFFFF" size={24} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchNotifications}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={openDrawer}>
           <Menu color="#FFFFFF" size={24} />
@@ -86,43 +125,57 @@ export default function NotificationsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Notifications */}
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {notifications.map((notification, index) => {
-          const IconComponent = notification.icon;
-          const isRead = readNotifications.includes(notification.id);
+        {notifications.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Bell size={48} color="#666666" />
+            <Text style={styles.emptyText}>No notifications yet</Text>
+            <Text style={styles.emptySubtext}>We'll notify you when something new arrives</Text>
+          </View>
+        ) : (
+          notifications.map((notification, index) => {
+            const IconComponent = NotificationIcons[notification.type] || Bell;
+            const isRead = readNotifications.includes(notification._id) || notification.isRead;
 
-          return (
-            <Animated.View
-              key={notification.id}
-              entering={FadeInDown.delay(index * 100)}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.notificationItem,
-                  !isRead && notification.isNew && styles.notificationUnread
-                ]}
-                onPress={() => markAsRead(notification.id)}
+            return (
+              <Animated.View
+                key={notification._id}
+                entering={FadeInDown.delay(index * 100)}
               >
-                <View style={[styles.iconContainer, { backgroundColor: notification.color }]}>
-                  <IconComponent color="#FFFFFF" size={20} />
-                </View>
-                <View style={styles.notificationContent}>
-                  <Text style={styles.notificationTitle}>{notification.title}</Text>
-                  <Text style={styles.notificationMessage}>{notification.message}</Text>
-                  <Text style={styles.notificationTime}>{notification.time}</Text>
-                </View>
-                {!isRead && notification.isNew && (
-                  <View style={styles.unreadDot} />
-                )}
-              </TouchableOpacity>
-            </Animated.View>
-          );
-        })}
+                <TouchableOpacity
+                  style={[
+                    styles.notificationItem,
+                    !isRead && styles.notificationUnread
+                  ]}
+                  onPress={() => markAsRead(notification._id)}
+                >
+                  <View 
+                    style={[
+                      styles.iconContainer,
+                      { backgroundColor: NotificationColors[notification.type] || '#666666' }
+                    ]}
+                  >
+                    <IconComponent color="#FFFFFF" size={20} />
+                  </View>
+                  <View style={styles.notificationContent}>
+                    <Text style={styles.notificationTitle}>{notification.title}</Text>
+                    <Text style={styles.notificationMessage}>{notification.message}</Text>
+                    <Text style={styles.notificationTime}>
+                      {new Date(notification.createdAt).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  {!isRead && (
+                    <View style={styles.unreadDot} />
+                  )}
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })
+        )}
       </ScrollView>
     </View>
   );
@@ -142,23 +195,41 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     backgroundColor: '#000000',
   },
-  headerCenter: {
-    position: 'relative',
+  logo: {
+    width: 40,
+    height: 40,
+    resizeMode: 'contain',
   },
-  badge: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: '#ED188D',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  badgeText: {
+  loadingText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#ED188D',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: 'bold',
   },
   content: {
@@ -167,6 +238,24 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 16,
     gap: 12,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    color: '#666666',
+    fontSize: 14,
+    textAlign: 'center',
   },
   notificationItem: {
     flexDirection: 'row',
@@ -214,10 +303,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     right: 16,
-  },
-  logo: {
-    width: 120,
-    height: 40,
-    resizeMode: 'contain',
   },
 });

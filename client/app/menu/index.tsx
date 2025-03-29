@@ -1,119 +1,119 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { menuService } from '@/services/api';
+import type { MenuItem } from '@/services/api/types';
+import ImageViewer from '@/components/ImageViewer';
 
 const WINDOW_WIDTH = Dimensions.get('window').width;
 const ITEM_WIDTH = WINDOW_WIDTH - 32;
 const ITEM_HEIGHT = ITEM_WIDTH * 0.6;
 
-const menuItems = [
-  {
-    _id: 1,
-    name: 'Gourmet Popcorn Combo',
-    price: '$12.99',
-    image: 'https://images.unsplash.com/photo-1585647347483-22b66260dfff?w=800&q=80',
-    description: 'Sweet & salty popcorn with a drink of your choice',
-    category: 'Snacks'
-  },
-  {
-    id: 2,
-    name: 'Nachos Supreme',
-    price: '$14.99',
-    image: 'https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?w=800&q=80',
-    description: 'Loaded nachos with cheese, jalapeños, and guacamole',
-    category: 'Snacks'
-  },
-  {
-    id: 3,
-    name: 'Movie Snack Bundle',
-    price: '$19.99',
-    image: 'https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=800&q=80',
-    description: 'Popcorn, candy, and two medium drinks',
-    category: 'Combos'
-  },
-  {
-    id: 4,
-    name: 'Soft Drinks Variety',
-    price: '$4.99',
-    image: 'https://images.unsplash.com/photo-1581636625402-29b2a704ef13?w=800&q=80',
-    description: 'Choice of Coca-Cola, Sprite, or Fanta',
-    category: 'Drinks'
-  },
-  {
-    id: 5,
-    name: 'Premium Coffee',
-    price: '$5.99',
-    image: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80',
-    description: 'Freshly brewed premium coffee',
-    category: 'Drinks'
-  }
-];
+function MenuItemCard({ item, onPress }) {
+  const imageRef = useRef();
+  const [layout, setLayout] = useState(null);
 
-const categories = [
-  { id: 'all', label: 'All Items' },
-  { id: 'snacks', label: 'Snacks' },
-  { id: 'drinks', label: 'Drinks' },
-  { id: 'combos', label: 'Combos' },
-];
+  const measureLayout = () => {
+    imageRef.current?.measure((x, y, width, height, pageX, pageY) => {
+      setLayout({ x: pageX, y: pageY, width, height });
+    });
+  };
+
+  return (
+    <TouchableOpacity 
+      style={styles.menuItem}
+      onPress={() => {
+        measureLayout();
+        onPress(item.image, layout);
+      }}
+    >
+      <Image 
+        ref={imageRef}
+        source={{ uri: item.image }}
+        style={styles.menuImage}
+        onLayout={measureLayout}
+      />
+      <View style={styles.menuContent}>
+        <View style={styles.menuHeader}>
+          <Text style={styles.menuName}>{item.name}</Text>
+          <Text style={styles.menuPrice}>${item.price}</Text>
+        </View>
+        <Text style={styles.menuDescription}>{item.description}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export default function MenuScreen() {
-  const [selectedCategory, setSelectedCategory] = React.useState('all');
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageLayout, setImageLayout] = useState<any>(null);
+  const [isImageViewerVisible, setIsImageViewerVisible] = useState(false);
   const router = useRouter();
 
-  const filteredItems = selectedCategory === 'all' 
-    ? menuItems 
-    : menuItems.filter(item => item.category.toLowerCase() === selectedCategory);
+  useEffect(() => {
+    fetchMenuItems();
+  }, []);
+
+  const fetchMenuItems = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await menuService.getMenuItems();
+      setMenuItems(response || []); // Ensure we always have an array
+    } catch (err) {
+      setError('Failed to load menu items. Please try again later.');
+      console.error('Error fetching menu items:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImagePress = (imageUrl: string, layout: any) => {
+    setSelectedImage(imageUrl);
+    setImageLayout(layout);
+    setIsImageViewerVisible(true);
+  };
+
+  const handleCloseImageViewer = () => {
+    setIsImageViewerVisible(false);
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ED188D" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchMenuItems}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Categories */}
-      <View style={styles.categoriesContainer}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesContent}
-        >
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category.id}
-              style={[
-                styles.categoryButton,
-                selectedCategory === category.id && styles.categoryButtonActive
-              ]}
-              onPress={() => setSelectedCategory(category.id)}
-            >
-              <Text style={[
-                styles.categoryButtonText,
-                selectedCategory === category.id && styles.categoryButtonTextActive
-              ]}>
-                {category.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
       {/* Menu Items */}
       <ScrollView 
         style={styles.menuList}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.menuListContent}
       >
-        {filteredItems.map((item) => (
-          <View key={item.id} style={styles.menuItem}>
-            <Image 
-              source={{ uri: item.image }}
-              style={styles.menuImage}
-            />
-            <View style={styles.menuContent}>
-              <View style={styles.menuHeader}>
-                <Text style={styles.menuName}>{item.name}</Text>
-                <Text style={styles.menuPrice}>{item.price}</Text>
-              </View>
-              <Text style={styles.menuDescription}>{item.description}</Text>
-              <Text style={styles.menuCategory}>{item.category}</Text>
-            </View>
-          </View>
+        {menuItems.map((item) => (
+          <MenuItemCard 
+            key={item._id}
+            item={item}
+            onPress={handleImagePress}
+          />
         ))}
       </ScrollView>
 
@@ -124,6 +124,14 @@ export default function MenuScreen() {
       >
         <Text style={styles.bookingButtonText}>BOOKING ROOM (ĐẶT PHÒNG)</Text>
       </TouchableOpacity>
+
+      {/* Image Viewer */}
+      <ImageViewer
+        isVisible={isImageViewerVisible}
+        imageUrl={selectedImage}
+        onClose={handleCloseImageViewer}
+        sourceLayout={imageLayout}
+      />
     </View>
   );
 }
@@ -133,29 +141,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  categoriesContainer: {
-    paddingTop: 16,
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    textAlign: 'center',
     marginBottom: 16,
   },
-  categoriesContent: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  categoryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#333333',
-    marginRight: 8,
-  },
-  categoryButtonActive: {
+  retryButton: {
     backgroundColor: '#ED188D',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
   },
-  categoryButtonText: {
+  retryButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
-  },
-  categoryButtonTextActive: {
+    fontSize: 16,
     fontWeight: 'bold',
   },
   menuList: {
@@ -176,15 +189,11 @@ const styles = StyleSheet.create({
   menuImage: {
     width: '100%',
     height: '100%',
-    position: 'absolute',
+    resizeMode: 'cover',
   },
   menuContent: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     padding: 16,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: '#333333',
   },
   menuHeader: {
     flexDirection: 'row',
@@ -209,11 +218,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.8,
     marginBottom: 4,
-  },
-  menuCategory: {
-    color: '#ED188D',
-    fontSize: 12,
-    fontWeight: '500',
   },
   bookingButton: {
     position: 'absolute',

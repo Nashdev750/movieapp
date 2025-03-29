@@ -1,36 +1,51 @@
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
+import { movieService } from '@/services/api';
+import type { Movie } from '@/services/api/types';
 
 const WINDOW_WIDTH = Dimensions.get('window').width;
 
-// Extended movie data with additional details
-const moviesData = {
-  1: {
-    _id: 1,
-    title: 'Inception',
-    image: 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=500&q=80',
-    description: 'A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.',
-    trailerUrl: 'https://www.youtube.com/embed/YoHD9XEInc0',
-  },
-  2: {
-    id: 2,
-    title: 'The Dark Knight',
-    image: 'https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=500&q=80',
-    description: 'When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.',
-    trailerUrl: 'https://www.youtube.com/embed/EXeTwQWrcwY',
-  },
-  // Add more movies with their details...
-};
-
 export default function MovieDetailsScreen() {
   const { id } = useLocalSearchParams();
-  const movie = moviesData[id as keyof typeof moviesData];
+  const [movie, setMovie] = useState<Movie | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!movie) {
+  useEffect(() => {
+    fetchMovieDetails();
+  }, [id]);
+
+  const fetchMovieDetails = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await movieService.getMovie(id as string);
+      setMovie(response);
+    } catch (err) {
+      setError('Failed to load movie details. Please try again later.');
+      console.error('Error fetching movie details:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Movie not found</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ED188D" />
+      </View>
+    );
+  }
+
+  if (error || !movie) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error || 'Movie not found'}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchMovieDetails}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -49,13 +64,15 @@ export default function MovieDetailsScreen() {
           <Text style={styles.description}>{movie.description}</Text>
 
           {/* Trailer Section */}
-          <View style={styles.trailerContainer}>
-            <WebView
-              style={styles.trailer}
-              source={{ uri: movie.trailerUrl }}
-              allowsFullscreenVideo
-            />
-          </View>
+          {movie.trailerUrl && (
+            <View style={styles.trailerContainer}>
+              <WebView
+                style={styles.trailer}
+                source={{ uri: movie.trailerUrl }}
+                allowsFullscreenVideo
+              />
+            </View>
+          )}
 
           {/* Booking Button */}
           <TouchableOpacity style={styles.bookingButton}>
@@ -71,6 +88,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#ED188D',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   scrollView: {
     flex: 1,
@@ -129,11 +176,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  errorText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 24,
   },
 });

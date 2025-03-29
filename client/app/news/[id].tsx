@@ -1,44 +1,52 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Calendar } from 'lucide-react-native';
+import { newsService } from '@/services/api';
+import type { News } from '@/services/api/types';
 
 const WINDOW_WIDTH = Dimensions.get('window').width;
-
-const newsData = {
-  1: {
-    _id: 1,
-    title: 'New IMAX Theater Opening Soon',
-    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&q=80',
-    date: 'March 20, 2024',
-    description: 'Experience movies like never before in our state-of-the-art IMAX theater. Our new IMAX theater features cutting-edge projection technology, immersive sound systems, and premium seating for the ultimate movie-watching experience.\n\nThe grand opening will feature exclusive screenings of upcoming blockbusters, special events, and promotional offers for our valued customers. Be among the first to experience the future of cinema in our new IMAX theater.',
-    gallery: [
-      'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=800&q=80',
-      'https://images.unsplash.com/photo-1585647347483-22b66260dfff?w=800&q=80',
-    ],
-  },
-  2: {
-    id: 2,
-    title: 'Special Movie Marathon Weekend',
-    image: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=800&q=80',
-    date: 'March 25, 2024',
-    description: 'Join us for an epic movie marathon featuring classic blockbusters. We\'ve curated a selection of fan-favorite films for an unforgettable weekend of entertainment.\n\nThe marathon includes complimentary snacks, exclusive merchandise, and special pricing for multiple screenings. Don\'t miss this chance to relive the magic of cinema\'s greatest hits on the big screen.',
-    gallery: [
-      'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&q=80',
-      'https://images.unsplash.com/photo-1585647347483-22b66260dfff?w=800&q=80',
-    ],
-  },
-  // Add more news items...
-};
 
 export default function NewsDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const news = newsData[id as keyof typeof newsData];
+  const [news, setNews] = useState<News | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!news) {
+  useEffect(() => {
+    fetchNewsDetails();
+  }, [id]);
+
+  const fetchNewsDetails = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await newsService.getNewsItem(id as string);
+      setNews(response);
+    } catch (err) {
+      setError('Failed to load news details. Please try again later.');
+      console.error('Error fetching news details:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>News article not found</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ED188D" />
+      </View>
+    );
+  }
+
+  if (error || !news) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error || 'News article not found'}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchNewsDetails}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -54,12 +62,15 @@ export default function NewsDetailScreen() {
 
         {/* Content */}
         <View style={styles.content}>
-          <Text style={styles.date}>{news.date}</Text>
+          <View style={styles.dateContainer}>
+            <Calendar size={16} color="#ED188D" />
+            <Text style={styles.date}>{news.date}</Text>
+          </View>
           <Text style={styles.title}>{news.title}</Text>
           <Text style={styles.description}>{news.description}</Text>
 
           {/* Gallery */}
-          {news.gallery && (
+          {news.gallery && news.gallery.length > 0 && (
             <View style={styles.gallery}>
               <Text style={styles.galleryTitle}>Gallery</Text>
               <ScrollView 
@@ -68,11 +79,12 @@ export default function NewsDetailScreen() {
                 contentContainerStyle={styles.galleryContent}
               >
                 {news.gallery.map((image, index) => (
-                  <Image 
-                    key={index}
-                    source={{ uri: image }} 
-                    style={styles.galleryImage}
-                  />
+                  <View key={index} style={styles.galleryImageContainer}>
+                    <Image 
+                      source={{ uri: image }} 
+                      style={styles.galleryImage}
+                    />
+                  </View>
                 ))}
               </ScrollView>
             </View>
@@ -96,6 +108,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#ED188D',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   scrollView: {
     flex: 1,
   },
@@ -112,15 +154,21 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.8))',
   },
   content: {
     padding: 16,
     paddingBottom: 100,
   },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
   date: {
     color: '#ED188D',
     fontSize: 14,
-    marginBottom: 8,
   },
   title: {
     color: '#FFFFFF',
@@ -147,11 +195,18 @@ const styles = StyleSheet.create({
   galleryContent: {
     gap: 12,
   },
-  galleryImage: {
+  galleryImageContainer: {
     width: WINDOW_WIDTH * 0.7,
     height: WINDOW_WIDTH * 0.4,
     borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#333333',
     marginRight: 12,
+  },
+  galleryImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   bookingButton: {
     position: 'absolute',
@@ -168,11 +223,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  errorText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 24,
   },
 });
